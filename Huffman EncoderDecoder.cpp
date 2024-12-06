@@ -33,7 +33,7 @@ void readContentFromFile(std::string& fileContent, std::string& fileName, std::s
    file.close();
 }
 
-void createFrequencyHeap(std::priority_queue<Element>& queue, const std::string& contentString)
+void createFrequencyHeap(std::priority_queue<Element, std::vector<Element>, std::greater<Element>>& queue, const std::string& contentString)
 {
    std::unordered_map<char, long long> freqTable;
    for (const auto symbol : contentString)
@@ -47,9 +47,89 @@ void createFrequencyHeap(std::priority_queue<Element>& queue, const std::string&
    }
 }
 
-void creatingTree(std::priority_queue<Element>& elements)
+Element* creatingBinaryTree(std::priority_queue<Element, std::vector<Element>, std::greater<Element>>& elements)
 {
+   // Taking the smallest 2 elements to join them in one Element.
 
+   while (elements.size() != 1)
+   {
+      Element min_1 = elements.top(); // taking smallest
+      elements.pop();
+      Element min_2 = elements.top(); // taking second smallest
+      elements.pop();
+
+      Element newEl{ min_1.weight + min_2.weight };
+      Element* leftChild = new Element(min_1);
+     leftChild->path += '0';
+
+      Element* rightChild = new Element(min_2);
+     rightChild->path += '1';
+
+      newEl.leftChild = leftChild;
+      newEl.rightChild = rightChild;
+
+      elements.push(newEl);
+   }
+
+   Element* root = new Element(elements.top());
+
+   return root;
+}
+
+std::string path;
+
+void createPrefixCodeTable(Element* root, char symbol, std::string& path)
+{
+   if (!root)
+   {
+      if (path.size())
+      {
+         path.pop_back();
+      }
+      return;
+   }
+
+   path += root->path;
+
+
+   if (!root->leftChild && !root->rightChild)
+   {
+      std::cout << root->symbol << " " << path << "\n";
+     /* path.pop_back();*/
+   }
+
+   if (root->symbol == symbol)
+   {
+      std::cout << root->path;
+      return;
+   }
+
+      //std::cout << root->symbol << "  " << root->path << "\n";
+      //path += root->path;
+
+      //if (root->rightChild)
+      //{
+      //   root->rightChild->path += path + '1';
+      //}
+
+
+      createPrefixCodeTable(root->leftChild, symbol, path);
+      createPrefixCodeTable(root->rightChild, symbol, path);
+   //}
+   
+
+}
+
+void printTree(Element* root)
+{
+   if (root)
+   {
+      printTree(root->leftChild);
+      //    path += root->path;
+      std::cout << root->symbol << "  " << root->path << "\n";
+
+      printTree(root->rightChild);
+   }
 }
 
 int main()
@@ -65,11 +145,15 @@ int main()
    std::string fileContent;
    readContentFromFile(fileContent, fileName, filePath);
 
-   std::priority_queue<Element> elementsHeap;
+   std::priority_queue<Element, std::vector<Element>, std::greater<Element>> elementsHeap;
    createFrequencyHeap(elementsHeap, fileContent);
 
-   creatingTree(elementsHeap);
+   Element * rootNode = creatingBinaryTree(elementsHeap);
 
+   std::string str;
+   createPrefixCodeTable(rootNode, 'x', str);
+
+   printTree(rootNode);
 
    return 0;
 }
