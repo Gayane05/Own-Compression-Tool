@@ -76,48 +76,29 @@ Element* creatingBinaryTree(std::priority_queue<Element, std::vector<Element>, s
    return root;
 }
 
-std::string path;
+std::unordered_map<char, std::string> prefixCodeTable;
 
 void createPrefixCodeTable(Element* root, char symbol, std::string& path)
 {
    if (!root)
    {
-      if (path.size())
-      {
-         path.pop_back();
-      }
       return;
    }
 
    path += root->path;
 
-
    if (!root->leftChild && !root->rightChild)
    {
       std::cout << root->symbol << " " << path << "\n";
-     /* path.pop_back();*/
+      prefixCodeTable[symbol] = path;
    }
 
-   if (root->symbol == symbol)
+   createPrefixCodeTable(root->leftChild, symbol, path);
+   createPrefixCodeTable(root->rightChild, symbol, path);
+   if (path.size())
    {
-      std::cout << root->path;
-      return;
+      path.pop_back();
    }
-
-      //std::cout << root->symbol << "  " << root->path << "\n";
-      //path += root->path;
-
-      //if (root->rightChild)
-      //{
-      //   root->rightChild->path += path + '1';
-      //}
-
-
-      createPrefixCodeTable(root->leftChild, symbol, path);
-      createPrefixCodeTable(root->rightChild, symbol, path);
-   //}
-   
-
 }
 
 void printTree(Element* root)
@@ -131,6 +112,15 @@ void printTree(Element* root)
       printTree(root->rightChild);
    }
 }
+
+void outputInFile()
+{
+   std::cout << "Insert output file name ";
+   std::string fileName;
+   std::cin >> fileName;
+
+}
+
 
 int main()
 {
