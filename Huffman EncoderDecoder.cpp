@@ -1,5 +1,4 @@
-﻿// Huffman EncoderDecoder.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+﻿// Huffman EncoderDecoder.cpp
 
 #include <iostream>
 #include <filesystem>
@@ -34,7 +33,7 @@ std::string toBinary(int n)
    return r;
 }
 
-void readContentFromFile(std::string& fileContent, const std::string& fileName, std::string& /*filePathName*/)
+void readContentFromFile(std::string& fileContent, const std::string& fileName, std::string filePathName = {""})
 {
    //if (!std::filesystem::exists(path))
    //{
@@ -75,17 +74,17 @@ Element* creatingBinaryTree(std::priority_queue<Element, std::vector<Element>, s
 
    while (elements.size() != 1)
    {
-      Element min_1 = elements.top(); // taking smallest
+      Element min_1 = elements.top(); // taking smallest.
       elements.pop();
-      Element min_2 = elements.top(); // taking second smallest
+      Element min_2 = elements.top(); // taking second smallest.
       elements.pop();
 
       Element newEl{ min_1.weight + min_2.weight };
       Element* leftChild = new Element(min_1);
-     leftChild->path += '0';
+      leftChild->path += '0';
 
       Element* rightChild = new Element(min_2);
-     rightChild->path += '1';
+      rightChild->path += '1';
 
       newEl.leftChild = leftChild;
       newEl.rightChild = rightChild;
@@ -124,13 +123,13 @@ void createPrefixCodeTable(Element* root, std::string& path)
    }
 }
 
-void saveInFile(std::string& initialText)
+std::string saveInFile(std::string& initialText)
 {
    std::cout << "Insert output file name ";
-   std::string fileName;
-   std::cin >> fileName;
+   std::string outputFileName;
+   std::cin >> outputFileName;
 
-   std::ofstream outputFile(fileName, std::ofstream::out);
+   std::ofstream outputFile(outputFileName, std::ofstream::out);
 
    for (const auto& it : prefixCodeTable)
    {
@@ -144,15 +143,26 @@ void saveInFile(std::string& initialText)
    }
    std::cout << "Encoded text " << encodedText  << " Total Bytes : " << encodedText.size() << '\n';
 
+   std::string fillFalsePrefix;
+   size_t fillFalsePrefixCount = 8 - (encodedText.size() % 8);
+   outputFile << fillFalsePrefixCount;
+
+   while (fillFalsePrefixCount--)
+   {
+      fillFalsePrefix += "0";
+   }
+
+   encodedText = fillFalsePrefix + encodedText;
+
    std::vector<uint8_t> encodedPackedText;
    for (size_t i = 0; i < encodedText.size(); i +=8)
    {
-      int number = binaryToDecimal(encodedText.substr(i, 8));  // Number as result of packed bits.
-      encodedPackedText.push_back(number);
-
       // Binary to decimal
-      // unsigned long decimal = std::bitset<8>(binary).to_ulong();
-      // std::cout << decimal << "\n";
+      std::string sub = encodedText.substr(i, 8);
+      unsigned int number = std::bitset<8>(sub).to_ulong();
+      // int number = binaryToDecimal(encodedText.substr(i, 8));  // Number as result of packed bits.
+
+      encodedPackedText.push_back(number);
    }
 
    for (size_t i = 0; i < encodedPackedText.size(); ++i)
@@ -162,10 +172,12 @@ void saveInFile(std::string& initialText)
    }
    outputFile.close();
 
-   std::cout << "Total Bytes : " << encodedPackedText.size() * sizeof(encodedPackedText[0]);
+   std::cout << "Total Bytes : " << encodedPackedText.size() * sizeof(encodedPackedText[0]) << "\n";
+
+   return outputFileName;
 }
 
-void encoding()
+std::string encoding()
 {
    std::cout << "Insert file path ";
    std::string filePath;
@@ -187,7 +199,7 @@ void encoding()
    std::string str;
    createPrefixCodeTable(rootNode, str);
 
-   saveInFile(initialText);
+   return saveInFile(initialText);
 }
 
 // Recreating Prefix code table for decoding from encoded content's header.
@@ -217,47 +229,56 @@ void recreatePrefixCodeTable(const std::string& encodedContent, size_t headerEnd
    }
 }
 
-
-std::string findTheValueSymbols(std::map<std::string, char, std::greater<>>& prefixCodeTable, std::string & byteKey, int max_length)
+std::string findTheValueSymbols(std::map<std::string, char, std::greater<>>& prefixCodeTable, std::string & byteKey, int max_length, int falseElCount)
 {
    // Need to refactor.
-   std::string valueSymbol;
-
-   std::string key = byteKey.substr(0, max_length);
-
-   while (prefixCodeTable.find(key) == prefixCodeTable.end())
-   {
-      key = byteKey.substr(0, max_length - 1);
-   }
-   valueSymbol += prefixCodeTable[key];
-
-   return valueSymbol;
-}
-
-std::string decodeEncodedMessage(const std::string& encodedMessage, std::map<std::string, char, std::greater<>>& prefixCodeTable)
-{
    std::string initialText;
-   std::string notPackedEncodedText;
 
-   for (size_t i = 0; i < encodedMessage.size(); ++i)
+   int charCount = max_length;
+
+   for (size_t i = falseElCount; i < byteKey.size();)
    {
-      std::string binary = std::bitset<8>(encodedMessage[i]).to_string(); //to binary
-      //decimalToBinary();
-      notPackedEncodedText += binary;
+      std::string key = byteKey.substr(i, charCount);
+
+      while (charCount > 0 && prefixCodeTable.find(key) == prefixCodeTable.end())
+      {
+         key = byteKey.substr(i, --charCount);
+      }
+      initialText += prefixCodeTable[key];
+      i += charCount;
+      charCount = max_length;
    }
-
-   size_t max_length = prefixCodeTable.begin()->first.size();
-
-   initialText = findTheValueSymbols(prefixCodeTable, notPackedEncodedText, static_cast<int>(max_length));
-
 
    return initialText;
 }
 
-void decoding()
+std::string decodeEncodedMessage(const std::string& encodedMessage, std::map<std::string, char, std::greater<>>& prefixCodeTable, char falseElCount)
 {
-   std::cout << "Insert file path ";
-   std::string filePath;
+   std::string initialText;
+   std::string binaryString;
+
+   for (uint8_t byte : encodedMessage)
+   {
+      binaryString += std::bitset<8>(byte).to_string();
+   }
+
+
+   //for (size_t i = 0; i < encodedMessage.size(); ++i)
+   //{
+   //   std::string binary = std::bitset<8>(encodedMessage[i]).to_string(); //to binary
+
+   //   std::string binary = toBinary(encodedMessage[i]);
+   //   binaryString += binary;
+   //}
+
+   size_t max_length = prefixCodeTable.begin()->first.size();
+   return findTheValueSymbols(prefixCodeTable, binaryString, static_cast<int>(max_length), falseElCount - '0');
+}
+
+void decoding(const std::string& outputFileName)
+{
+  // std::cout << "Insert file path ";
+   // std::string filePath;
    ////std::cin >> filePath;
 
    //std::cout << "Insert file name of encoded text";
@@ -265,23 +286,209 @@ void decoding()
    //std::cin >> fileName;
 
    std::string encodedContent;
-   readContentFromFile(encodedContent, std::string{"out.txt"}, filePath);
+   readContentFromFile(encodedContent, std::string{"out.txt"}/*, filePath*/);
 
    const auto headerEndsPos = encodedContent.find_last_of('\\');
-   std::string encodedText = encodedContent.substr(headerEndsPos + 1); // Taking only encoded text.
+   std::string encodedText = encodedContent.substr(headerEndsPos + 2); // Taking only encoded text and ignoring false elements count.
 
    std::map<std::string, char, std::greater<>> prefixCodeTable;
    recreatePrefixCodeTable(encodedContent, headerEndsPos, prefixCodeTable);
 
-   decodeEncodedMessage(encodedText, prefixCodeTable);
+   std::string initialText = decodeEncodedMessage(encodedText, prefixCodeTable, encodedContent[headerEndsPos + 1]);
+
+   std::cout << "Initial Message was: " << initialText;
+
+   std::ofstream file(outputFileName);
+   if (!file.is_open()) 
+   {
+      //  throw InvalidJSONFileFormat("Cannot open file", __LINE__);
+   }
+
+   file << initialText;
 }
 
 
 int main()
 {
-   encoding();
-
-   decoding();
+   std::string outputFileName = encoding();
+   decoding(outputFileName);
 
    return 0;
 }
+
+
+
+
+/*
+
+#include <iostream>
+#include <queue>
+#include <unordered_map>
+#include <vector>
+#include <string>
+#include <bitset>
+
+using namespace std;
+
+// A Huffman tree node
+struct Node {
+   char ch;
+   int freq;
+   Node* left;
+   Node* right;
+
+   Node(char character, int frequency) {
+      ch = character;
+      freq = frequency;
+      left = nullptr;
+      right = nullptr;
+   }
+};
+
+// Compare nodes for priority queue (min-heap)
+struct Compare
+{
+   bool operator()(Node* left, Node* right)
+   {
+      return left->freq > right->freq;
+   }
+};
+
+// Traverse the Huffman Tree and store Huffman Codes in a map
+void encode(Node* root, string str, unordered_map<char, string>& huffmanCode)
+{
+   if (!root) return;
+
+   if (!root->left && !root->right) {
+      huffmanCode[root->ch] = str;
+   }
+
+   encode(root->left, str + "0", huffmanCode);
+   encode(root->right, str + "1", huffmanCode);
+}
+
+
+// Traverse the Huffman Tree and decode the encoded string
+string decode(Node* root, string encodedString)
+{
+   string decodedString = "";
+   Node* current = root;
+
+   for (char bit : encodedString) {
+      if (bit == '0') {
+         current = current->left;
+      }
+      else {
+         current = current->right;
+      }
+
+      if (!current->left && !current->right) {
+         decodedString += current->ch;
+         current = root;
+      }
+   }
+   return decodedString;
+}
+
+// Pack a binary string into bytes
+vector<uint8_t> packBitsIntoBytes(const string& binaryString)
+{
+   vector<uint8_t> packedBytes;
+   size_t length = binaryString.length();
+   for (size_t i = 0; i < length; i += 8) {
+      string byteStr = binaryString.substr(i, 8);
+      while (byteStr.length() < 8) {
+         byteStr += "0"; // Pad with zeros to make it 8 bits
+      }
+      uint8_t byte = static_cast<uint8_t>(bitset<8>(byteStr).to_ulong());
+      packedBytes.push_back(byte);
+   }
+   return packedBytes;
+}
+
+// Build the Huffman Tree and perform encoding, packing, and decoding
+void huffmanCompression(const string& text)
+{
+   // Count frequency of each character
+   unordered_map<char, int> freqMap;
+   for (char ch : text) {
+      freqMap[ch]++;
+   }
+
+   // Create a priority queue (min-heap)
+   priority_queue<Node*, vector<Node*>, Compare> pq;
+
+   // Create a leaf node for each character and add it to the priority queue
+   for (auto pair : freqMap) {
+      pq.push(new Node(pair.first, pair.second));
+   }
+
+   // Build the Huffman Tree
+   while (pq.size() > 1) {
+      Node* left = pq.top(); pq.pop();
+      Node* right = pq.top(); pq.pop();
+
+      // Create a new internal node with frequency equal to the sum of the two nodes
+      Node* newNode = new Node('\0', left->freq + right->freq);
+      newNode->left = left;
+      newNode->right = right;
+      pq.push(newNode);
+   }
+
+   // Root of the Huffman Tree
+   Node* root = pq.top();
+
+   // Generate Huffman Codes
+   unordered_map<char, string> huffmanCode;
+   encode(root, "", huffmanCode);
+
+   cout << "Huffman Codes:\n";
+   for (auto pair : huffmanCode) {
+      cout << pair.first << " : " << pair.second << '\n';
+   }
+
+   // Encode the input text
+   string encodedString = "";
+   for (char ch : text) {
+      encodedString += huffmanCode[ch];
+   }
+
+   cout << "\nEncoded Bit String:\n" << encodedString << '\n';
+
+   // Pack the encoded string into bytes
+   vector<uint8_t> packedBytes = packBitsIntoBytes(encodedString);
+
+   cout << "\nPacked Bytes (as integers):\n";
+   for (uint8_t byte : packedBytes) {
+      cout << static_cast<int>(byte) << " ";
+   }
+   cout << "\nTotal Bytes: " << packedBytes.size() << '\n';
+
+   // Decode the packed bit string back to text
+   string binaryString = "";
+   for (uint8_t byte : packedBytes) {
+      binaryString += bitset<8>(byte).to_string();
+   }
+   // Remove any padding (if necessary)
+   binaryString = binaryString.substr(0, encodedString.length());
+
+   string decodedString = decode(root, binaryString);
+
+   cout << "\nDecoded String:\n" << decodedString << '\n';
+
+   // Clean up the allocated memory for the tree
+   delete root;
+}
+
+
+int main()
+{
+   string text;
+   cout << "Enter text to compress: ";
+   getline(cin, text);
+
+   huffmanCompression(text);
+
+   return 0;
+}
+*/
